@@ -101,6 +101,33 @@ def evaluate(features, support, labels, mask, placeholders):
     outs_val = sess.run([model.loss, model.accuracy, model.pred, model.labels], feed_dict=feed_dict_val)
     return outs_val[0], outs_val[1], outs_val[2], outs_val[3], (time.time() - t_test)
 
+def extract_activations(features, support, labels, placeholders, train_mask, test_mask, out_dir=''):
+    feed_dict_val = construct_feed_dict(
+        features, support, labels, test_mask, placeholders)
+    # extract activations for both layers on forward pass
+    activations = sess.run([model.layers[0].embedding, model.layers[1].embedding], feed_dict=feed_dict_val)
+
+    os.makedirs(out_dir, exist_ok=True)
+    # train set activations
+    idxs = np.where(train_mask)[0] if hasattr(train_mask, '__iter__') else range(activations[0].shape[0])
+    with open(f'{out_dir}/epoch_{epoch}_train_activations_1.txt', 'w') as f:
+        for i in idxs:
+            act1 = activations[0][i]
+            f.write(' '.join(map(str, act1)) + '\n')
+    with open(f'{out_dir}/epoch_{epoch}_train_activations_2.txt', 'w') as f:
+        for i in idxs:
+            act2 = activations[1][i]
+            f.write(' '.join(map(str, act2)) + '\n')
+    # test set activations
+    idxs = np.where(test_mask)[0] if hasattr(test_mask, '__iter__') else range(activations[0].shape[0])
+    with open(f'{out_dir}/epoch_{epoch}_test_activations_1.txt', 'w') as f:
+        for i in idxs:
+            act1 = activations[0][i]
+            f.write(' '.join(map(str, act1)) + '\n')
+    with open(f'{out_dir}/epoch_{epoch}_test_activations_2.txt', 'w') as f:
+        for i in idxs:
+            act2 = activations[1][i]
+            f.write(' '.join(map(str, act2)) + '\n')
 
 # Init variables
 sess.run(tf.compat.v1.global_variables_initializer())
@@ -124,6 +151,10 @@ for epoch in range(FLAGS.epochs):
     cost, acc, pred, labels, duration = evaluate(
         features, support, y_val, val_mask, placeholders)
     cost_val.append(cost)
+
+    # extract activations every 10 epochs
+    if epoch % 10 == 0:
+        extract_activations(features, support, y_train, placeholders, train_mask + val_mask, test_mask, out_dir='activations')
 
     print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(outs[1]),
           "train_acc=", "{:.5f}".format(
@@ -202,3 +233,8 @@ doc_embeddings_str = '\n'.join(doc_vectors)
 f = open('data/' + dataset + '_doc_vectors.txt', 'w')
 f.write(doc_embeddings_str)
 f.close()
+
+# save labels file for processing of activations later
+import shutil
+shutil.copyfile('data/corpus/' + dataset + '_labels.txt', 'activations/' + dataset + '_labels.txt')
+shutil.copyfile('data/' + dataset + '_shuffle.txt', 'activations/' + dataset + '_shuffle.txt')
