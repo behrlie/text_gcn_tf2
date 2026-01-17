@@ -3,6 +3,10 @@ from __future__ import print_function
 
 import time
 import tensorflow as tf
+gpus = tf.config.list_physical_devices('GPU')
+print("Num GPUs Available: ", len(gpus))
+print(gpus)
+
 tf.compat.v1.disable_eager_execution()
 
 from sklearn import metrics
