@@ -19,7 +19,7 @@ import sys
 if len(sys.argv) != 2:
 	sys.exit("Use: python train.py <dataset>")
 
-datasets = ['20ng', 'R8', 'R52', 'ohsumed', 'mr']
+datasets = ['20ng', 'R8', 'R52', 'ohsumed', 'mr', 'WOS11967']
 dataset = sys.argv[1]
 
 if dataset not in datasets:
@@ -43,7 +43,10 @@ flags.DEFINE_string('dataset', dataset, 'Dataset string.')
 flags.DEFINE_string('model', 'gcn', 'Model string.')
 flags.DEFINE_float('learning_rate', 0.02, 'Initial learning rate.')
 flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
-flags.DEFINE_integer('hidden1', 200, 'Number of units in hidden layer 1.')
+if dataset == 'WOS11967':
+    flags.DEFINE_integer('hidden1', 140, 'Number of units in hidden layer 1.')
+else:
+    flags.DEFINE_integer('hidden1', 200, 'Number of units in hidden layer 1.')
 flags.DEFINE_float('dropout', 0.5, 'Dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 0,
                    'Weight for L2 loss on embedding matrix.')  # 5e-4
@@ -137,6 +140,7 @@ def extract_activations(features, support, labels, placeholders, train_mask, tes
 sess.run(tf.compat.v1.global_variables_initializer())
 
 cost_val = []
+val_acc = []
 
 # Train model
 for epoch in range(FLAGS.epochs):
@@ -159,6 +163,7 @@ for epoch in range(FLAGS.epochs):
     # extract activations every 10 epochs
     if epoch % 10 == 0:
         extract_activations(features, support, y_train, placeholders, train_mask + val_mask, test_mask, out_dir='activations')
+    val_acc.append(acc)
 
     print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(outs[1]),
           "train_acc=", "{:.5f}".format(
@@ -170,6 +175,9 @@ for epoch in range(FLAGS.epochs):
         break
 
 print("Optimization Finished!")
+with open('activations/' + dataset + '_val_acc.txt', 'w') as f:
+    for epoch in range(len(val_acc)):
+        f.write(f'{val_acc[epoch]}\n')
 
 # Testing
 test_cost, test_acc, pred, labels, test_duration = evaluate(
