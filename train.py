@@ -160,8 +160,8 @@ for epoch in range(FLAGS.epochs):
         features, support, y_val, val_mask, placeholders)
     cost_val.append(cost)
 
-    # extract activations every 10 epochs
-    if epoch % 10 == 0:
+    # extract activations every 5 epochs
+    if epoch % 5 == 0:
         extract_activations(features, support, y_train, placeholders, train_mask + val_mask, test_mask, out_dir='activations')
     val_acc.append(acc)
 
