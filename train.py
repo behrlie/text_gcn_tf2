@@ -105,8 +105,14 @@ def evaluate(features, support, labels, mask, placeholders):
     t_test = time.time()
     feed_dict_val = construct_feed_dict(
         features, support, labels, mask, placeholders)
+    feed_dict_val[placeholders['dropout']] = 0.0
     outs_val = sess.run([model.loss, model.accuracy, model.pred, model.labels], feed_dict=feed_dict_val)
-    return outs_val[0], outs_val[1], outs_val[2], outs_val[3], (time.time() - t_test)
+    loss, acc, pred, label_ids = outs_val
+    idxs = np.where(mask)[0] if hasattr(mask, '__iter__') else range(len(pred))
+    masked_pred = pred[idxs]
+    masked_labels = label_ids[idxs]
+    macro_f1 = metrics.f1_score(masked_labels, masked_pred, average='macro')
+    return loss, acc, pred, label_ids, macro_f1, (time.time() - t_test)
 
 def extract_activations(features, support, labels, placeholders, train_mask, test_mask, out_dir=''):
     feed_dict_val = construct_feed_dict(
@@ -155,8 +161,12 @@ for epoch in range(FLAGS.epochs):
     outs = sess.run([model.opt_op, model.loss, model.accuracy,
                      model.layers[0].embedding], feed_dict=feed_dict)
 
+    # Train evaluation without dropout
+    train_cost, train_acc, train_pred, train_labels, train_macro_f1, _ = evaluate(
+        features, support, y_train, train_mask, placeholders)
+
     # Validation
-    cost, acc, pred, labels, duration = evaluate(
+    cost, acc, pred, labels, val_macro_f1, duration = evaluate(
         features, support, y_val, val_mask, placeholders)
     cost_val.append(cost)
 
@@ -165,10 +175,10 @@ for epoch in range(FLAGS.epochs):
         extract_activations(features, support, y_train, placeholders, train_mask + val_mask, test_mask, out_dir='activations')
     val_acc.append(acc)
 
-    print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(outs[1]),
-          "train_acc=", "{:.5f}".format(
-              outs[2]), "val_loss=", "{:.5f}".format(cost),
-          "val_acc=", "{:.5f}".format(acc), "time=", "{:.5f}".format(time.time() - t))
+    print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(train_cost),
+          "train_acc=", "{:.5f}".format(train_acc), "train_macro_f1=", "{:.5f}".format(train_macro_f1),
+          "val_loss=", "{:.5f}".format(cost),
+          "val_acc=", "{:.5f}".format(acc), "val_macro_f1=", "{:.5f}".format(val_macro_f1), "time=", "{:.5f}".format(time.time() - t))
 
     if epoch > FLAGS.early_stopping and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
         print("Early stopping...")
@@ -180,10 +190,10 @@ with open('activations/' + dataset + '_val_acc.txt', 'w') as f:
         f.write(f'{val_acc[epoch]}\n')
 
 # Testing
-test_cost, test_acc, pred, labels, test_duration = evaluate(
+test_cost, test_acc, pred, labels, test_macro_f1, test_duration = evaluate(
     features, support, y_test, test_mask, placeholders)
 print("Test set results:", "cost=", "{:.5f}".format(test_cost),
-      "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))
+      "accuracy=", "{:.5f}".format(test_acc), "macro_f1=", "{:.5f}".format(test_macro_f1), "time=", "{:.5f}".format(test_duration))
 
 test_pred = []
 test_labels = []
